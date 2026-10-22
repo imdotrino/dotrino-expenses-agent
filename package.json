@@ -1,0 +1,46 @@
+{
+  "name": "@dotrino/expenses-agent",
+  "version": "0.1.0",
+  "description": "El agente de Expenses en tu PC: lee los avisos del banco de tu buzón (IMAP) y se los pasa a expenses.dotrino.com por una sesión cifrada. Las credenciales viven en tu bóveda. Ecosistema Dotrino.",
+  "type": "module",
+  "bin": {
+    "dotrino-expenses-agent": "bin/cli.js"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "update.js",
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node bin/cli.js",
+    "test": "node --test test/*.test.mjs",
+    "test:imap": "node --test test/imap.integration.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imdotrino/dotrino-expenses-agent.git"
+  },
+  "keywords": [
+    "dotrino",
+    "expenses",
+    "imap",
+    "agent",
+    "privacy"
+  ],
+  "dependencies": {
+    "@dotrino/remote-agent": "0.23.1",
+    "@dotrino/update": "0.9.2",
+    "@dotrino/vault": "0.96.0",
+    "imapflow": "2.9.0",
+    "mailparser": "3.12.2"
+  }
+}

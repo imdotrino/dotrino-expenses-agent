@@ -1,0 +1,6 @@
+node_modules/
+.claude/
+.npmrc
+*.tgz
+sbom-*.json
+npm-integrity.json

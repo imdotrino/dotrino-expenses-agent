@@ -1,0 +1,77 @@
+# Publica @dotrino/expenses-agent DESDE CI, no desde el portátil de nadie.
+#
+# Sin token: npm cambia un credencial efímero por la identidad OIDC de esta ejecución
+# (publicación de confianza) y firma la procedencia él solo. La confianza se declara en
+# npm, por paquete, con:
+#   npm trust github @dotrino/expenses-agent --file release.yml --repo imdotrino/dotrino-expenses-agent
+# **El nombre de este archivo tiene que coincidir exacto.**
+#
+# Se dispara con un tag `vX.Y.Z`. Y un SBOM por release (CUMPLIMIENTO.md §2).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write      # crear la release y subirle el SBOM
+  id-token: write      # OIDC: la publicación de confianza y la atestación
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # La publicación de confianza pide npm ≥11.5.1; Node 22 trae npm 10, por eso se sube.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - run: npm i -g npm@latest
+      - run: npm ci
+
+      # El tag tiene que decir la misma versión que el package.json: si no, se publicaría
+      # una versión con los artefactos colgados de otra release.
+      - name: El tag coincide con la versión
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+
+      # LAS PRUEBAS ANTES DE PUBLICAR. Una versión que no pasa su suite no llega a npm.
+      - run: npm test
+      # El registro de compatibilidad (dotrino-roadmap, CONVENCIONES §14): nada instalado en
+      # una versión marcada rota ni por debajo de lo que exige la ficha. Con @latest, que trae
+      # la lista de rotas más nueva. Va antes de publicar: aquí sí frena.
+      - run: npx --yes @dotrino/roadmap@latest check
+
+      - name: SBOM (CycloneDX)
+        run: |
+          npx --yes @cyclonedx/cyclonedx-npm@latest \
+            --omit dev --output-format JSON \
+            --output-file "sbom-expenses-agent-$(node -p "require('./package.json').version").cdx.json"
+
+      - name: Atestiguar el SBOM
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'sbom-*.cdx.json'
+
+      # LO QUE SE PUBLICA ES LO QUE SE MIDIÓ (CONVENCIONES §15). El agente instalado se
+      # actualiza solo, y antes comprueba que el tarball que le da npm cuadra con el hash que
+      # esta release adjunta (`npm-integrity.json`): por eso se empaqueta UNA vez, se mide ese
+      # archivo y se publica ESE archivo, byte a byte.
+      - name: Empaquetar
+        run: npm pack
+      - name: Medir lo que se va a publicar
+        run: npx --yes @dotrino/update@latest integrity ./*.tgz > npm-integrity.json
+      - name: Publicar en npm ESE archivo
+        run: npm publish ./*.tgz --access public
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom-*.cdx.json
+            npm-integrity.json
+          generate_release_notes: true
