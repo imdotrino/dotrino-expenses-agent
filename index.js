@@ -10,6 +10,7 @@ import { startRemoteAgent } from '@dotrino/remote-agent/agent'
 import { waitForSecrets } from '@dotrino/vault/service'
 import { makeHandler } from './src/handler.js'
 import { NS } from './src/config.js'
+import { codeError } from './src/errors.js'
 
 export const LABEL = 'expenses-agent'
 
@@ -28,7 +29,7 @@ export async function startExpensesAgent (opts) {
   // Se lee el enlace en cada petición: el papel se renueva mientras el agente corre.
   const loadSecrets = opts.loadSecrets || (async () => {
     const link = opts.link || loadLink(opts.dir)
-    if (!link) throw Object.assign(new Error('this agent is not linked to a vault'), { code: 'not-linked' })
+    if (!link) throw codeError('not-linked', 'this agent is not linked to a vault')
     return waitForSecrets({ ...secretsArgs(link), retryMs: 3000, maxRetryMs: 15000, onRetry: (e, ms) => log(`vault: ${e.message}; retry in ${Math.round(ms / 1000)}s`) })
   })
   const handle = makeHandler({ loadSecrets, fetch: opts.fetch, version: opts.version, log })

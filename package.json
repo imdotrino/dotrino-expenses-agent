@@ -1,6 +1,6 @@
 {
   "name": "@dotrino/expenses-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "El agente de Expenses en tu PC: lee los avisos del banco de tu buzón (IMAP) y se los pasa a expenses.dotrino.com por una sesión cifrada. Las credenciales viven en tu bóveda. Ecosistema Dotrino.",
   "type": "module",
   "bin": {

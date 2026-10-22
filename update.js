@@ -11,13 +11,13 @@
 import { watchSelfUpdateNpm } from '@dotrino/update/npm'
 import { vaultUpdateHooks } from '@dotrino/vault/service'
 import { loadLink } from '@dotrino/remote-agent/link'
+import { codeError } from './src/errors.js'
 
 export const PKG = '@dotrino/expenses-agent'
 export const REPO = 'imdotrino/dotrino-expenses-agent'
 /** Las releases llevan el tag `vX.Y.Z`. */
 export const releaseTag = (version) => `v${version}`
 
-const fail = (code, message) => Object.assign(new Error(message), { code })
 
 /**
  * Lo que este agente le dice a SU bóveda sobre actualizarse: los tres ganchos de
@@ -39,7 +39,7 @@ export function vaultHooks ({ dir, product = PKG, log = console.log, load = load
     async mayUpdate (u) {
       const h = now()
       // Sin enlace no hay a quién preguntar. No es un «no»: se dice y se reintenta.
-      if (!h) throw fail('not-linked', 'this agent is not linked to a vault, so there is nobody to ask')
+      if (!h) throw codeError('not-linked', 'this agent is not linked to a vault, so there is nobody to ask')
       return h.mayUpdate(u)
     },
     // Sin enlace no hay bóveda a la que contárselo: no es un fallo que reintentar.
