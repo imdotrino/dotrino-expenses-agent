@@ -6,7 +6,8 @@ export const DEFAULT_PROXY = 'wss://proxy.dotrino.com'
 
 /**
  * Quién es este aparato ante su bóveda, sacado del enlace.
- * @param {{ proxy?: string, iss: string, device: string, cert: object }} link
+ * @param {import('@dotrino/remote-agent/link').AgentLink} link
+ * @returns {{ proxyUrl: string, masterPubkey: string, device: unknown, cert: unknown }}
  */
 export function vaultIdentity (link) {
   return { proxyUrl: link.proxy || DEFAULT_PROXY, masterPubkey: link.iss, device: link.device, cert: link.cert }

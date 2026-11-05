@@ -3,6 +3,8 @@
 
 import { codeError } from './errors.js'
 
+/** @typedef {import('./types.js').ImapConfig} ImapConfig */
+
 export const NS = 'expenses'
 
 export const KEYS = Object.freeze({
@@ -17,6 +19,7 @@ export const KEYS = Object.freeze({
 /**
  * Lo guardado en el cajón → la configuración. Falta host, usuario o contraseña: `not-configured`.
  * @param {Record<string,string>} secrets
+ * @returns {ImapConfig}
  */
 export function configFromSecrets (secrets) {
   const host = String(secrets[KEYS.host] || '').trim()
@@ -39,15 +42,24 @@ export function configFromSecrets (secrets) {
   }
 }
 
-/** Lo que se le enseña a la PWA: nunca la contraseña, y el usuario a medias. */
+/**
+ * Lo que se le enseña a la PWA: nunca la contraseña, y el usuario a medias.
+ * @param {ImapConfig} cfg
+ * @returns {import('./types.js').PublicConfig}
+ */
 export function publicConfig (cfg) {
   const [name, domain] = cfg.user.split('@')
   const masked = domain ? `${name.slice(0, 2)}…@${domain}` : `${cfg.user.slice(0, 2)}…`
   return { host: cfg.host, user: masked, folder: cfg.folder, from: cfg.from }
 }
 
-/** Las respuestas de `setup` → las variables del cajón. */
+/**
+ * Las respuestas de `setup` → las variables del cajón.
+ * @param {import('./types.js').SetupAnswers} answers
+ * @returns {Array<{ key: string, value: string }>}
+ */
 export function varsFromAnswers ({ host, port, user, password, folder, from }) {
+  /** @type {Array<{ key: string, value: string }>} */
   const vars = [
     { key: KEYS.host, value: host },
     { key: KEYS.port, value: String(port || 993) },

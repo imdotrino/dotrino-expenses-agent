@@ -11,25 +11,36 @@
 import { configFromSecrets, publicConfig } from './config.js'
 import { fetchMails } from './imap.js'
 
+/** @typedef {import('./types.js').AgentReply} AgentReply */
+/** @typedef {import('./types.js').CodeError} CodeError */
+
 /**
- * @param {{ loadSecrets: () => Promise<Record<string,string>>, fetch?: typeof fetchMails, version: string, log?: (m:string)=>void }} deps
+ * @param {{ loadSecrets: () => Promise<Record<string,string>>, fetch?: import('./types.js').FetchMails, version: string, log?: (m:string)=>void }} deps
+ * @returns {(msg: unknown) => Promise<AgentReply | null>}
  */
 export function makeHandler ({ loadSecrets, fetch = fetchMails, version, log = () => {} }) {
   // Una lectura por cursor a la vez: dos pestañas pidiendo lo mismo comparten la lectura.
+  /** @type {Map<string, Promise<import('./types.js').FetchResult>>} */
   const busy = new Map()
 
   async function config () {
     return configFromSecrets(await loadSecrets())
   }
 
-  return async function handle (msg) {
-    if (!msg || typeof msg !== 'object') return null
+  /**
+   * @param {unknown} raw lo que llega por la sesión cifrada
+   * @returns {Promise<AgentReply | null>}
+   */
+  return async function handle (raw) {
+    if (!raw || typeof raw !== 'object') return null
+    const msg = /** @type {import('./types.js').AgentRequest} */ (raw)
     try {
       if (msg.type === 'status') {
         try {
           const cfg = await config()
           return { type: 'status', configured: true, mailbox: publicConfig(cfg), version }
-        } catch (e) {
+        } catch (err) {
+          const e = /** @type {CodeError} */ (err)
           if (e.code === 'not-configured') return { type: 'status', configured: false, code: e.code, version }
           throw e
         }
@@ -37,25 +48,33 @@ export function makeHandler ({ loadSecrets, fetch = fetchMails, version, log = (
       if (msg.type === 'pull') {
         const cursor = validCursor(msg.cursor)
         const key = JSON.stringify(cursor)
-        if (!busy.has(key)) {
-          busy.set(key, (async () => {
+        let read = busy.get(key)
+        if (!read) {
+          read = (async () => {
             const cfg = await config()
             const res = await fetch(cfg, cursor, { limit: msg.limit })
             log(`pulled ${res.mails.length} mail(s) from ${cfg.folder}`)
             return res
-          })().finally(() => busy.delete(key)))
+          })().finally(() => busy.delete(key))
+          busy.set(key, read)
         }
-        const { mails, cursor: next } = await busy.get(key)
+        const { mails, cursor: next } = await read
         return { type: 'mails', mails, cursor: next }
       }
       return { type: 'fail', code: 'unknown-type', message: `unknown message type: ${msg.type}` }
-    } catch (e) {
+    } catch (err) {
+      const e = /** @type {CodeError} */ (err)
       log(`${msg.type} failed: ${e.code || 'error'} ${e.message}`)
       return { type: 'fail', code: e.code || 'agent-failed', message: String(e.message || e) }
     }
   }
 }
 
+/**
+ * El cursor que manda la PWA, si vale; si no, `null` (se lee por fecha).
+ * @param {any} c
+ * @returns {import('./types.js').Cursor | null}
+ */
 function validCursor (c) {
   if (!c) return null
   if (typeof c !== 'object' || !c.uidValidity || !Number.isSafeInteger(Number(c.uid))) return null

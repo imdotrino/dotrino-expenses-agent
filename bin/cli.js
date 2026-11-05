@@ -23,15 +23,36 @@ const KIND = LABEL
 const { version: VERSION } = createRequire(import.meta.url)('../package.json')
 const args = process.argv.slice(2)
 const cmd = args[0] && !args[0].startsWith('-') ? args[0] : 'run'
+/** @param {string} name @returns {string | undefined} */
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 
+/**
+ * El mensaje de un error para la consola: con su `code` delante si lo trae.
+ * @param {unknown} e
+ */
+function errorText (e) {
+  const err = /** @type {{ code?: string, message?: string }} */ (e)
+  return err.code ? `${err.code}: ${err.message}` : err.message
+}
+
+/** @param {unknown} e */
+const messageOf = (e) => /** @type {{ message?: string }} */ (e).message
+
+/**
+ * Pregunta por la terminal. `hidden`: lo tecleado no se ve.
+ * @param {string} q
+ * @param {{ hidden?: boolean }} [o]
+ * @returns {Promise<string>}
+ */
 function ask (q, { hidden = false } = {}) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true })
+  const output = process.stdout
+  // `_writeToOutput` no es API pública de readline, pero es la forma de no repetir lo tecleado.
+  const rl = /** @type {readline.Interface & { _writeToOutput: (s: string) => void }} */ (readline.createInterface({ input: process.stdin, output, terminal: true }))
   if (hidden) {
     // Lo tecleado no se ve: una contraseña no se queda en la pantalla ni en el scroll.
-    rl._writeToOutput = (s) => { if (s.startsWith(q)) rl.output.write(q) }
+    rl._writeToOutput = (s) => { if (s.startsWith(q)) output.write(q) }
   }
-  return new Promise((res) => rl.question(q, (a) => { if (hidden) rl.output.write('\n'); rl.close(); res(a) }))
+  return new Promise((res) => rl.question(q, (a) => { if (hidden) output.write('\n'); rl.close(); res(a) }))
 }
 
 if (args.includes('-h') || args.includes('--help')) {
@@ -57,11 +78,13 @@ DOTRINO_REMOTE_AGENT_DIR fuerzan una carpeta concreta)`)
   process.exit(0)
 }
 
+/** @returns {{ name: string | null, dir: string }} */
 function instance () {
   const fixed = opt('--dir') || process.env.DOTRINO_REMOTE_AGENT_DIR
   return fixed ? { name: null, dir: fixed } : resolveInstance(KIND, opt('--name'))
 }
 
+/** @param {string} dir */
 function linkedOrExit (dir) {
   const link = loadLink(dir)
   if (!link) { console.error(`Este agente no está enlazado (${dir}). Enlázalo con: dotrino-expenses-agent`); process.exit(1) }
@@ -81,7 +104,7 @@ if (cmd === 'update') {
     const dir = instance().dir
     const own = args.slice(1).filter((a, i, all) => !['--name', '--dir'].includes(a) && !['--name', '--dir'].includes(all[i - 1]))
     r = updatePrefsCommand(own, { dir, lang: 'es' })
-  } catch (e) { console.error('error:', e.message); process.exit(1) }
+  } catch (e) { console.error('error:', messageOf(e)); process.exit(1) }
   if (!r.handled) { console.error('uso: dotrino-expenses-agent update [--name <n>] [--approval on|off] [--notify on|off]'); process.exit(2) }
   ;(r.ok ? console.log : console.error)(r.text)
   process.exit(r.ok ? 0 : 2)
@@ -95,7 +118,7 @@ if (cmd === 'info') {
     const pending = updateStatusText({ dir: inst.dir, current: VERSION, lang: 'es' })
     if (args.includes('--json')) console.log(JSON.stringify(pending ? { ...info, update: pending } : info, null, 2))
     else console.log(formatDeviceInfo(info) + (pending ? '\n' + pending : ''))
-  } catch (e) { console.error('error:', e.message); process.exit(1) }
+  } catch (e) { console.error('error:', messageOf(e)); process.exit(1) }
   process.exit(0)
 }
 
@@ -119,7 +142,7 @@ if (cmd === 'setup') {
     if (r.pending) console.log(`\n  Algunos datos ya existían: cambiarlos espera la aprobación de tu bóveda (pedido ${r.pending}).`)
     else console.log(`\n  ✓ Guardado en tu bóveda: ${r.keys.join(', ')}`)
     console.log('  Pruébalo con: dotrino-expenses-agent check\n')
-  } catch (e) { console.error('error:', e.code ? `${e.code}: ${e.message}` : e.message); process.exit(1) }
+  } catch (e) { console.error('error:', errorText(e)); process.exit(1) }
   process.exit(0)
 }
 
@@ -134,10 +157,11 @@ if (cmd === 'check') {
     const { mails } = await fetchMails(cfg, null, { limit: 5 })
     console.log(`  ✓ Conecta. Últimos ${mails.length} correo(s) de los últimos 30 días:`)
     for (const m of mails) console.log(`    · ${m.date?.slice(0, 10) || '?'}  ${m.from}  ${m.subject}`)
-  } catch (e) { console.error('error:', e.code ? `${e.code}: ${e.message}` : e.message); process.exit(1) }
+  } catch (e) { console.error('error:', errorText(e)); process.exit(1) }
   process.exit(0)
 }
 
+/** @param {string} dir */
 async function doEnroll (dir) {
   console.log('Enlazar esta máquina con tu bóveda.')
   console.log(`En el PC de tu bóveda corre:  dotrino-vault pair --service ${NS} --scope sign`)
@@ -192,6 +216,6 @@ try {
   const bye = () => { clearInterval(keepAlive); stopUpdates(); agent.close(); process.exit(0) }
   process.on('SIGINT', bye); process.on('SIGTERM', bye)
 } catch (e) {
-  console.error('error:', e.message)
+  console.error('error:', messageOf(e))
   process.exit(1)
 }

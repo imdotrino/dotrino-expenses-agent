@@ -12,11 +12,11 @@ export const SINCE_DAYS = 30
 export const MAX_MAILS = 50
 const MAX_TEXT = 8000
 
+/** @typedef {import('./types.js').Mail} Mail */
+
 /**
- * @param {{ host:string, port:number, secure:boolean, user:string, password:string, folder:string, from:string[] }} cfg
- * @param {{ uidValidity:string, uid:number } | null} cursor
- * @param {{ ImapFlow?: any, simpleParser?: Function, now?: () => number, limit?: number }} [deps]
- * @returns {Promise<{ mails: Array<{ id:string, from:string, subject:string, date:string|null, text:string }>, cursor: { uidValidity:string, uid:number } }>}
+ * Los correos nuevos desde `cursor` (o de los últimos SINCE_DAYS días sin él).
+ * @type {import('./types.js').FetchMails}
  */
 export async function fetchMails (cfg, cursor, deps = {}) {
   const ImapFlow = deps.ImapFlow || (await import('imapflow')).ImapFlow
@@ -41,15 +41,18 @@ export async function fetchMails (cfg, cursor, deps = {}) {
     try {
       box = await client.mailboxOpen(cfg.folder, { readOnly: true })
     } catch (e) {
-      throw codeError('imap-folder', `cannot open folder "${cfg.folder}": ${e?.responseText || e?.message || e}`, { cause: e })
+      const err = /** @type {{ responseText?: string, message?: string } | undefined} */ (e)
+      throw codeError('imap-folder', `cannot open folder "${cfg.folder}": ${err?.responseText || err?.message || e}`, { cause: e })
     }
     const uidValidity = String(box.uidValidity)
     const fresh = !cursor || String(cursor.uidValidity) !== uidValidity
     // Lo nuevo: por UID desde el cursor, o por fecha la primera vez. El filtro de remitentes
     // lo hace el servidor (un OR de FROM), para no bajarse el buzón entero.
+    /** @type {{ since?: Date, uid?: string, from?: string, or?: Array<{ from: string }> }} */
     const query = fresh ? { since: new Date(now() - SINCE_DAYS * 86400_000) } : { uid: `${Number(cursor.uid) + 1}:*` }
     if (cfg.from.length === 1) query.from = cfg.from[0]
     else if (cfg.from.length > 1) query.or = cfg.from.map((f) => ({ from: f }))
+    /** @type {number[]} */
     let uids = (await client.search(query, { uid: true })) || []
     // `n:*` devuelve el último aunque sea anterior a n: se quita lo que ya se tenía.
     if (!fresh) uids = uids.filter((u) => u > Number(cursor.uid))
@@ -57,6 +60,7 @@ export async function fetchMails (cfg, cursor, deps = {}) {
     // La primera vez, lo más reciente; después, en orden desde el cursor, para que si hay más
     // de `limit` la siguiente lectura siga donde quedó esta en vez de saltárselos.
     const take = fresh ? uids.slice(-limit) : uids.slice(0, limit)
+    /** @type {Mail[]} */
     const mails = []
     let last = fresh ? 0 : Number(cursor.uid)
     for (const uid of take) {
@@ -81,12 +85,21 @@ export async function fetchMails (cfg, cursor, deps = {}) {
   }
 }
 
+/**
+ * El texto del correo: el de texto plano, o el HTML sin etiquetas.
+ * @param {{ text?: string, html?: string | false }} parsed lo que da `simpleParser`
+ * @returns {string}
+ */
 function bodyText (parsed) {
   if (parsed.text && parsed.text.trim()) return parsed.text
   // Solo HTML: se deja el texto. El lector de la PWA vuelve a limpiarlo igual.
   return String(parsed.html || '').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Un fallo de imapflow → un error con `code` que la PWA sabe explicar.
+ * @param {any} e lo que lanza imapflow (un Error con campos propios, o cualquier cosa)
+ */
 function imapError (e) {
   const msg = e?.responseText || e?.message || String(e)
   if (e?.authenticationFailed || /auth/i.test(e?.serverResponseCode || '') || /authenticat|login|credentials|password/i.test(msg)) {

@@ -15,14 +15,20 @@ import { vaultIdentity } from './src/link.js'
 
 export const LABEL = 'expenses-agent'
 
-/** Lo que piden `fetchSecrets`/`storeVars` con la identidad de un agente de remote-agent. */
+/**
+ * Lo que piden `fetchSecrets`/`storeVars` con la identidad de un agente de remote-agent.
+ * @param {import('@dotrino/remote-agent/link').AgentLink} link
+ * @returns {import('@dotrino/vault/service').VaultConnection}
+ */
 export function secretsArgs (link) {
   return { ns: NS, ...vaultIdentity(link), enc: link.enc }
 }
 
 /**
- * @param {{ dir: string, version: string, proxyUrl?: string, link?: object, client?: object, quiet?: boolean,
- *   onReady?: Function, onRevoked?: Function, loadSecrets?: () => Promise<Record<string,string>>, fetch?: Function, log?: Function }} opts
+ * @param {{ dir: string, version: string, proxyUrl?: string, link?: import('@dotrino/remote-agent/link').AgentLink, client?: object, quiet?: boolean,
+ *   onReady?: () => void, onRevoked?: () => void, loadSecrets?: () => Promise<Record<string,string>>,
+ *   fetch?: import('./src/types.js').FetchMails, log?: (m: string) => void }} opts
+ * @returns {Promise<import('@dotrino/remote-agent/agent').RemoteAgent>}
  */
 export async function startExpensesAgent (opts) {
   const log = opts.log || ((m) => console.log(`[expenses-agent] ${m}`))
@@ -46,7 +52,8 @@ export async function startExpensesAgent (opts) {
     onSession (session) {
       session.on('message', async (msg) => {
         const reply = await handle(msg)
-        if (reply) await session.send({ ...reply, re: msg?.re ?? null }).catch((e) => log(`reply failed: ${e.message}`))
+        const re = msg && typeof msg === 'object' && 're' in msg ? msg.re : undefined
+        if (reply) await session.send({ ...reply, re: re ?? null }).catch((e) => log(`reply failed: ${e.message}`))
       })
     },
   })

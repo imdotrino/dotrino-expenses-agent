@@ -16,7 +16,11 @@ import { vaultIdentity } from './src/link.js'
 
 export const PKG = '@dotrino/expenses-agent'
 export const REPO = 'imdotrino/dotrino-expenses-agent'
-/** Las releases llevan el tag `vX.Y.Z`. */
+/**
+ * Las releases llevan el tag `vX.Y.Z`.
+ * @param {string} version
+ * @returns {string}
+ */
 export const releaseTag = (version) => `v${version}`
 
 
@@ -26,8 +30,10 @@ export const releaseTag = (version) => `v${version}`
  * del disco. El papel se renueva mientras el agente corre, y el agente puede arrancar sin
  * enlace y enlazarse después: una conexión fijada al arrancar se quedaría vieja.
  *
- * @param {{ dir: string, product?: string, log?: (m: string) => void, load?: (dir: string) => any, make?: (o: any) => any }} o
- * @returns {{ mayUpdate: Function, onUpdated: Function, onNeedsRoot: Function }}
+ * @param {{ dir: string, product?: string, log?: (m: string) => void,
+ *   load?: (dir: string) => import('@dotrino/remote-agent/link').AgentLink | null,
+ *   make?: typeof vaultUpdateHooks }} o
+ * @returns {import('@dotrino/vault/service').UpdateHooks}
  */
 export function vaultHooks ({ dir, product = PKG, log = console.log, load = loadLink, make = vaultUpdateHooks }) {
   const now = () => {
@@ -55,7 +61,8 @@ export function vaultHooks ({ dir, product = PKG, log = console.log, load = load
  * `dir` es la carpeta de datos de ESTA instancia (su enlace y sus ajustes) y `version` la
  * que está en marcha. Lo demás es para las pruebas.
  *
- * @param {{ dir: string, version: string, agent: { close: () => void }, exit?: (code: number) => void, log?: (m: string) => void, watch?: (o: any) => (() => void), hooks?: object, idleCheckMs?: number }} o
+ * @param {{ dir: string, version: string, agent: { close: () => void }, exit?: (code: number) => void, log?: (m: string) => void,
+ *   watch?: (o: Record<string, unknown>) => (() => void), hooks?: import('@dotrino/vault/service').UpdateHooks, idleCheckMs?: number }} o
  * @returns {() => void} para dejar de mirar
  */
 export function startSelfUpdate ({ dir, version, agent, exit = (code) => process.exit(code), log = console.log, watch = watchSelfUpdateNpm, hooks = vaultHooks({ dir, log }) }) {
@@ -66,6 +73,7 @@ export function startSelfUpdate ({ dir, version, agent, exit = (code) => process
     tag: releaseTag,
     dir,
     ...hooks,
+    /** @param {{ version: string, restart: boolean }} r */
     onInstalled: ({ version: v, restart }) => {
       // Sin quien lo levante no se va: irse sería apagarle el servicio al usuario.
       if (!restart) return
