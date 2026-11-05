@@ -12,6 +12,7 @@ import { watchSelfUpdateNpm } from '@dotrino/update/npm'
 import { vaultUpdateHooks } from '@dotrino/vault/service'
 import { loadLink } from '@dotrino/remote-agent/link'
 import { codeError } from './src/errors.js'
+import { vaultIdentity } from './src/link.js'
 
 export const PKG = '@dotrino/expenses-agent'
 export const REPO = 'imdotrino/dotrino-expenses-agent'
@@ -32,7 +33,7 @@ export function vaultHooks ({ dir, product = PKG, log = console.log, load = load
   const now = () => {
     const link = load(dir)
     if (!link?.device || !link.cert || !link.iss) return null
-    return make({ product, log, proxyUrl: link.proxy || 'wss://proxy.dotrino.com', masterPubkey: link.iss, device: link.device, cert: link.cert })
+    return make({ product, log, ...vaultIdentity(link) })
   }
   return {
     // true = sí · false = no, o pasó el día sin respuesta · lanza = no se pudo preguntar.
